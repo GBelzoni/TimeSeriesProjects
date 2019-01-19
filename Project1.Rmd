@@ -1,0 +1,137 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+```{r}
+library(dplyr)
+
+library(ggplot2)
+
+path_data = "http://www.maths.adelaide.edu.au/andrew.metcalfe/Data/"
+
+
+# plot(maine_data)
+
+```
+
+```{r}
+
+file_data = "Maine.dat"
+file_path = file_data %>% paste0(path_data,.)
+maine_data = read.table(file_path,header = TRUE)
+
+
+
+file_data = "cbe.dat"
+file_path = file_data %>% paste0(path_data,.)
+cbe_data = read.table(file_path,header = TRUE)
+
+file_data = "pounds_nz.dat"
+file_path = file_data %>% paste0(path_data,.)
+GBPNZD = read.table(file_path,header = TRUE)
+
+
+file_data = "global.dat"
+file_path = file_data %>% paste0(path_data,.)
+global_temp = read.table(file_path,header = TRUE)
+
+file_data = "wave.dat"
+file_path = file_data %>% paste0(path_data,.)
+wave = read.table(file_path,header = TRUE)
+
+
+file_data = "Fontdsdt.dat"
+file_path = file_data %>% paste0(path_data,.)
+Font = read.table(file_path,header = TRUE)
+
+file_data = "wine.dat"
+file_path = file_data %>% paste0(path_data,.)
+wine = read.table(file_path,header = TRUE)
+
+file_data = "HP.txt"
+file_path = file_data %>% paste0(path_data,.)
+HP = read.table(file_path,header = TRUE)
+
+
+file_data = "stemp.dat"
+file_path = file_data %>% paste0(path_data,.)
+stemp = read.table(file_path,header = TRUE)
+
+AP = data("AirPassengers")
+
+maine_ts  = ts(maine_data$unemploy,start=c(1996,1),freq=12)
+maine_ts
+```
+
+```{r}
+maine_ts %>% plot
+```
+
+```{r}
+# maine_annual = maine_ts %>% aggregate()/12
+# maine_annual
+
+dfr_data = maine_data %>%
+  mutate(timestampp = 1:n() ) 
+
+dfr_data %>% ggplot2::ggplot(ggplot2::aes(x=timestampp, y=unemploy)) +
+ggplot2::geom_point() +
+ggplot2::geom_smooth()
+
+
+```
+
+```{r}
+
+#model
+ts_len = dfr_data %>% nrow()
+train_frac = 0.7
+
+num_train = (ts_len * train_frac) %>% floor()
+
+num_test = ts_len - num_train
+num_test
+
+```
+```{r}
+
+
+train_idx = dfr_data[num_train, 'timestampp']
+print(train_idx)
+dfr_data_new =dfr_data %>% 
+  mutate(train_test = ifelse(timestampp < train_idx, 'train','test'))
+```
+
+```{r}
+# Holt-Winters
+mod_HW =
+  dfr_data_new %>%
+  dplyr::filter(train_test == 'train') %>%
+    select(unemploy) %>%
+    ts(start = c(1996,1),freq=12) %>%
+    HoltWinters()
+
+# mod_HW %>% plot
+
+pred = mod_HW %>% 
+  predict(n.ahead = num_test ) %>% 
+  as.numeric()
+
+
+# dfr_data_frame = 
+dfr_data_pred =  dfr_data_new[(train_idx):(ts_len-1),] %>%
+ mutate(unemploy = pred) %>%
+ mutate(train_test = 'predict')
+
+dfr_data_with_preds = dfr_data_new %>% 
+  bind_rows(dfr_data_pred) 
+
+dfr_data_with_preds %>%ggplot(aes(x=timestampp, y=unemploy, colour= train_test)) +
+  geom_line()
+ 
+```
