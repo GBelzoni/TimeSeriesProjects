@@ -2,6 +2,13 @@
 title: "R Notebook"
 output: html_notebook
 ---
+The purpose of this project is to compare forecasting methodologies on data sets in Introductory Time Series with R
+
+We want to be able to do both:
+
+* Decompose series into trend/seasonality(??)/other
+* Forecast k-periods ahead and evaluate pred error and confidence interval
+
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
 
@@ -9,7 +16,6 @@ When you save the notebook, an HTML file containing the code and output will be 
 
 ```{r}
 library(dplyr)
-
 library(ggplot2)
 
 path_data = "http://www.maths.adelaide.edu.au/andrew.metcalfe/Data/"
@@ -31,6 +37,7 @@ file_data = "cbe.dat"
 file_path = file_data %>% paste0(path_data,.)
 cbe_data = read.table(file_path,header = TRUE)
 
+
 file_data = "pounds_nz.dat"
 file_path = file_data %>% paste0(path_data,.)
 GBPNZD = read.table(file_path,header = TRUE)
@@ -44,7 +51,6 @@ file_data = "wave.dat"
 file_path = file_data %>% paste0(path_data,.)
 wave = read.table(file_path,header = TRUE)
 
-
 file_data = "Fontdsdt.dat"
 file_path = file_data %>% paste0(path_data,.)
 Font = read.table(file_path,header = TRUE)
@@ -57,15 +63,32 @@ file_data = "HP.txt"
 file_path = file_data %>% paste0(path_data,.)
 HP = read.table(file_path,header = TRUE)
 
-
 file_data = "stemp.dat"
 file_path = file_data %>% paste0(path_data,.)
 stemp = read.table(file_path,header = TRUE)
+
 
 AP = data("AirPassengers")
 
 maine_ts  = ts(maine_data$unemploy,start=c(1996,1),freq=12)
 maine_ts
+```
+
+```{r}
+list_data = c()
+
+
+AP
+maine_ts
+global_temp
+GBPNZD
+maine_data
+cbe_data
+wave
+Font
+wine
+HP
+stemp
 ```
 
 ```{r}
@@ -126,12 +149,24 @@ pred = mod_HW %>%
 # dfr_data_frame = 
 dfr_data_pred =  dfr_data_new[(train_idx):(ts_len-1),] %>%
  mutate(unemploy = pred) %>%
- mutate(train_test = 'predict')
+ mutate(train_test = 'HW_predict')
 
 dfr_data_with_preds = dfr_data_new %>% 
   bind_rows(dfr_data_pred) 
 
 dfr_data_with_preds %>%ggplot(aes(x=timestampp, y=unemploy, colour= train_test)) +
   geom_line()
- 
+
+
 ```
+
+```{r}
+
+pred_error = 
+  dfr_data %>% 
+  dplyr::filter(train_test)
+
+
+
+```
+
