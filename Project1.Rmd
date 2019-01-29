@@ -19,6 +19,8 @@ library(dplyr)
 library(ggplot2)
 library(tseries)
 library(forecast)
+library(tidyr)
+
 path_data = "http://www.maths.adelaide.edu.au/andrew.metcalfe/Data/"
 
 
@@ -138,7 +140,7 @@ ggplot2::geom_smooth()
 
 #model
 ts_len = dfr_data %>% nrow()
-train_frac = 0.7
+train_frac = 0.8
 
 num_train = (ts_len * train_frac) %>% floor()
 
@@ -183,6 +185,7 @@ dfr_data_pred = dfr_data_new[(offset_fitted_data+1):(train_idx-1),] %>%
   mutate(unemploy = mod_HW$fitted[,1] %>% as.numeric()) %>%
   mutate(train_test = 'HW_predict')
 
+
 #adding HW fitted data back to data
 dfr_data_with_preds = dfr_data_new %>% 
   bind_rows(dfr_data_pred) 
@@ -204,23 +207,6 @@ pred_error %>% ggplot(aes(x=timestampp, y = error)) +
   geom_point() +
   geom_line() +
   geom_hline(yintercept = 0)
-
-#get error vector
-error = pred_error%>% 
-  drop_na() %>% 
-  # select(error) %>%
-  dplyr::pull(error)
-
-#fit ARIMA to error
-model_error_auto = error %>% auto.arima
-model_error_auto
-model_error = error %>% arima(order= c(1,0,1))
-model_error$coef
-model_error_auto$fitted
-
-
-# -------- FORECASTING ---------------------------------
-
 #we want to make n-step ahead forecasts
 
 #we do forecast of determenistic level, trend, season using n-step ahead HW
@@ -242,11 +228,182 @@ dfr_data_with_preds = dfr_data_new %>%
 dfr_data_with_preds %>%ggplot(aes(x=timestampp, y=unemploy, colour= train_test)) +
   geom_line()
 
+mod_HW$fitted %>% plot
+```
+
+```{r}
+#Training ARIMA
+model_ARIMA_auto = dfr_data_new %>%
+  dplyr::filter(train_test == 'train') %>%
+    select(unemploy) %>%
+    ts(start = c(1996,1),freq=12) %>%
+    auto.arima()
+model_ARIMA_auto
+
+
+
+#Forecasting ARIMA
+
+pred = model_ARIMA_auto %>% 
+  predict(n.ahead = num_test ) %$% #weird operator shorthand for with(.)
+  pred %>%
+  as.numeric()
+
+# dfr_data_frame = 
+dfr_data_pred =  dfr_data_new[(train_idx):(ts_len-1),] %>%
+ mutate(unemploy = pred) %>%
+ mutate(train_test = 'ARIMA_predict')
+
+dfr_data_with_preds = dfr_data_new %>% 
+  bind_rows(dfr_data_pred) 
+
+dfr_data_with_preds %>%ggplot(aes(x=timestampp, y=unemploy, colour= train_test)) +
+  geom_line()
 
 ```
 
 ```{r}
-library(tidyr)
+fit_model = function(model_function, dfr_in, pc_train){
+  
+  #model
+  ts_len = dfr_data %>% nrow()
+  train_frac = 0.8
+  
+  num_train = (ts_len * train_frac) %>% floor()
+  
+  num_test = ts_len - num_train
+  num_test
+  
+  train_idx = dfr_data[num_train, 'timestampp']
+  
+  dfr_data_new =dfr_data %>% 
+    mutate(train_test = ifelse(timestampp < train_idx, 'train','test'))
+  
+  # ------------  Holt-Winters
+  mod_HW$fitted[,1] %>% as.numeric()
+  dfr_data_new %>% head
+  
+  
+  # -------- TRAINING ---------------------------------
+  
+  ##################
+  # define model_fit_function(df_train, target_col, prediction_label ,parameters) -> list(model_inner_fitted, dfr_out)
+  ##################
+  #
+  #fit HoltWinters - this will fit trend and seasonal
+  mod =
+    dfr_data_new %>%
+    dplyr::filter(train_test == 'train') %>%
+      select(unemploy) %>%
+      ts(start = c(1996,1),freq=12) %>%
+      HoltWinters()
+  
+  #Add HW prediction error back on
+  
+  #get offset to HW data - there is 'burn in' like a moving average with HW model so have to offset the data
+  number_training = mod_HW$x %>% nrow
+  number_HW_fitted = mod_HW$fitted %>% nrow
+  offset_fitted_data = number_training - number_HW_fitted 
+  
+  #create df with fitted data, correct ts, and labels
+  dfr_data_pred = dfr_data_new[(offset_fitted_data+1):(train_idx-1),] %>% 
+    mutate(unemploy = mod_HW$fitted[,1] %>% as.numeric()) %>%
+    mutate(train_test = 'HW_predict')
+  
+  
+  #adding HW fitted data back to data
+  dfr_data_with_preds = dfr_data_new %>% 
+    bind_rows(dfr_data_pred) 
+  
+  ##################
+  #define model_predict(model, dfr_in, prediction_label, steps_ahead) -> dfr_out
+  ##################
+  
+    #we do forecast of determenistic level, trend, season using n-step ahead HW
+    #we can use ARIMA model to forecast error paths and use these to get confidence intervals
+    #then check does pred fall in confidence interval
+    
+    pred = mod_HW %>% 
+      predict(n.ahead = num_test ) %>% 
+      as.numeric()
+    
+    # dfr_data_frame = 
+    dfr_data_pred =  dfr_data_new[(train_idx):(ts_len-1),] %>%
+     mutate(unemploy = pred) %>%
+     mutate(train_test = 'HW_predict')
+    
+    dfr_data_with_preds = dfr_data_new %>% 
+      bind_rows(dfr_data_pred) 
+  
+  output_res = list(model, dfr_out)
+  
+  return(model_results)
+}
+```
+
+Note:
+Forecasts from both
+* Holt-Winters
+* ARIMA(seasonal) 
+Seem to be really sensitive to trend in data
+The forecasts seem to predict a trend that follows the last few periods of the data.
+E.g: 
+* If training has upwards direction in trend component near end of data, then forecasts follow that
+* HW seems less susceptible on a couple of trials
+
+Reasons:
+* HW fitting routine in R is designed to mimise the one-step ahead errors, maybe we need to minimise multiple steps ahead
+* auto ARIMA fits in sample data and doesn't worry about forecasting at all in optimisation precedure, seems a bit wrong
+
+
+TODO:
+* put these in a function
+* try different data set lengths
+* test over different data sets and write insights
+* do state space model
+* we are interested in forecasting multiple steps ahead, so want to pick models that minimise that error, not the in sample training error
+  * need to work out k-fold cross val equivalent for timeseries
+  * grid search the parameters for ARIMA (urgh)
+  * optimise for 
+
+
+```{r}
+
+### Holt-Winters Bootstrapping training data
+
+# we can simulate from the error data model to create N more data sets, then re-fit the HW model, to get estimated C.I and mean of parameters
+
+#we can the forecast ahead with each model,use the bootstrapped parameter estimates + simulated ARIMA errors
+
+#then we see how our test data looks vs training
+
+#get error vector
+error = pred_error%>% 
+  drop_na() %>% 
+  select(error) #%>%
+  # as.numeric()
+
+#fit ARIMA to error
+model_error_auto = error %>% auto.arima
+model_error_auto
+model_error = error %>% arima(order= c(1,0,1))
+model_error$coef
+model_error_auto$fitted
+
+
+
+```
+
+```{r}
+# -------- FORECASTING ---------------------------------
+
+
+
+
+
+```
+
+```{r}
 pred_error =   dfr_data_with_preds %>% 
   dplyr::filter((train_test == "test") | (train_test == "HW_predict")) %>%
   spread(train_test,unemploy) %>%
