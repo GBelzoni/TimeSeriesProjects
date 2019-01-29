@@ -76,20 +76,44 @@ maine_ts
 ```
 
 ```{r}
-list_data = c()
+list_data_names = list(
+  'AP',
+  'maine_ts',
+  'global_temp',
+  'GBPNZD',
+  'maine_data',
+  'cbe_data',
+  'wave',
+  'Font',
+  'wine',
+  'HP',
+  'stemp')
+
+list_data = list(
+  AP,
+  maine_ts,
+  global_temp,
+  GBPNZD,
+  maine_data,
+  cbe_data,
+  wave,
+  Font,
+  wine,
+  HP,
+  stemp)
 
 
-AP
-maine_ts
-global_temp
-GBPNZD
-maine_data
-cbe_data
-wave
-Font
-wine
-HP
-stemp
+for(i in 1:length(list_data)){
+
+  
+  df = list_data[i]
+  fn = list_data_names[i] %>% paste0("data/",.,".csv")
+  print(fn)
+  df %>% write.csv(fn,row.names = F)
+  
+} 
+
+
 ```
 
 ```{r}
